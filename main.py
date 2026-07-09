@@ -94,6 +94,24 @@ else:
 
 app = FastAPI(title="SAIA Backend")
 
+
+# ---- FRONTEND (serve the SAIA HTML on the same Railway domain) --------
+# The frontend is a single static HTML file. Instead of hosting it
+# separately (e.g. GitHub Pages), we serve it directly from this same
+# FastAPI app on "/", so the whole product lives at one Railway URL and
+# there's no separate CORS-enabled deployment to keep in sync.
+_FRONTEND_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "sahm_finance_platform.html"
+)
+
+
+@app.get("/", include_in_schema=False)
+def serve_frontend():
+    from fastapi.responses import FileResponse
+
+    return FileResponse(_FRONTEND_PATH, media_type="text/html")
+
+
 # ---- WATCHLIST STORAGE (SQLite) ---------------------------------------
 # The watchlist is per-user (keyed by the signed-in Google account's email)
 # and needs to sync across devices, so it lives in a small local SQLite
