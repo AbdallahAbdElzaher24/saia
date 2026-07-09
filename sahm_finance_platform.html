@@ -801,7 +801,7 @@
 let GOOGLE_CLIENT_ID = "";
 
 async function loadConfig() {
-    const res = await fetch("http://localhost:8000/api/config");
+    const res = await fetch("/api/config");
     const config = await res.json();
 
     GOOGLE_CLIENT_ID = config.google_client_id;
