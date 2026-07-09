@@ -1034,7 +1034,7 @@ const API_CONFIG = {
 };
 
 async function apiRequest(path, params = {}){
-  const url = new URL(API_CONFIG.baseUrl.replace(/\/$/, '') + path);
+  const url = new URL(API_CONFIG.baseUrl.replace(/\/$/, '') + path, window.location.origin);
   Object.entries(params).forEach(([k, v]) => {
     if(v !== undefined && v !== null && v !== '') url.searchParams.set(k, v);
   });
@@ -1073,7 +1073,7 @@ async function apiPost(path, body = {}, opts = {}){
 }
 
 async function apiDelete(path, params = {}){
-  const url = new URL(API_CONFIG.baseUrl.replace(/\/$/, '') + path);
+  const url = new URL(API_CONFIG.baseUrl.replace(/\/$/, '') + path, window.location.origin);
   Object.entries(params).forEach(([k, v]) => {
     if(v !== undefined && v !== null && v !== '') url.searchParams.set(k, v);
   });
