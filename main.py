@@ -1303,3 +1303,9 @@ def chrome_devtools_probe():
 import chatbot  # noqa: E402
 
 ask_chatbot = chatbot.ask_chatbot
+import os
+
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.environ.get("PORT", 8000)) 
+    uvicorn.run("app:app", host="0.0.0.0", port=port)
