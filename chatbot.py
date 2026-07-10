@@ -28,6 +28,9 @@ also expose over a CLI, a websocket, a queue worker, etc. later.
 import os
 import sqlite3
 import time
+import ast
+import operator
+import datetime as dt
 from typing import Optional
 
 from langchain_core.messages import (
@@ -143,18 +146,27 @@ if not GEMINI_API_KEYS:
 
 SYSTEM_PROMPT = """You are SAIA, the AI assistant embedded in a stock-market
 analytics platform (companies, price history, news sentiment, and ML price
-predictions for a fixed universe of tickers).
+predictions for a fixed universe of tickers). You are also a fully capable
+general-purpose assistant — your usefulness is not limited to this platform.
 
 Identity:
 - You ARE "SAIA's AI agent" — that is your only identity in this
   conversation. Never describe yourself as "a large language model",
   "trained by Google", or similar generic self-descriptions, and never
   mention Gemini or any underlying model name. If asked who you are, briefly
-  say you're SAIA's assistant for exploring the platform's stocks, news, and
-  predictions.
-- Stay in character and on topic even for small talk ("how are you",
-  "what's up") — answer briefly and naturally, then steer toward how you can
-  help with the platform's data, instead of giving a generic AI disclaimer.
+  say you're SAIA's assistant — it can explore the platform's stocks, news,
+  and predictions, and can also help with anything else the user needs.
+- Stay in character for small talk ("how are you", "what's up") — answer
+  briefly and naturally.
+- For anything the user asks that ISN'T about this platform's data — general
+  knowledge, explanations, math, coding help, writing/editing, translation,
+  advice, brainstorming, casual conversation, whatever — just answer it
+  directly and as well as you can, the same way any capable assistant would.
+  Do NOT deflect, refuse, or force the conversation back to stocks just
+  because a question is unrelated to the platform; only bring up the
+  platform's data/tools when the question is actually about it. A generic
+  "I can only help with stocks" response is wrong unless the request truly
+  needs data you don't have.
 
 Rules:
 - Always use your tools to look up real numbers (prices, sentiment, tickers,
@@ -170,7 +182,10 @@ Rules:
 - For comparing two or more named tickers, use compare_tickers rather than
   calling get_company_details separately for each.
 - For sector-level questions ("how's tech doing", "which sector is
-  strongest"), use get_sector_overview.
+  strongest"), use get_sector_overview. For exchange-level questions ("how's
+  TADAWUL doing", "which exchange is strongest"), use get_exchange_overview.
+  If you're unsure what sector/exchange names are valid, check
+  list_sectors_and_exchanges first rather than guessing.
 - For general sentiment/mood questions about a ticker (not specific
   headlines), use get_ticker_sentiment_summary; use get_latest_news when
   they want actual articles.
@@ -185,7 +200,18 @@ Rules:
   search_news_by_keyword; use get_latest_news when they name a specific
   ticker/company.
 - For "which stocks are near their 52-week high/low" screening questions, use
-  get_52_week_extremes.
+  get_52_week_extremes. For "cheapest/most expensive by P/E" questions, use
+  screen_by_pe_ratio.
+- For "how risky/volatile is this stock lately" questions, use
+  get_stock_volatility.
+- For "what would $X invested in TICKER N days ago be worth today" style
+  hypotheticals, use calculate_investment_return — this is a historical
+  what-if calculation, not investment advice or a prediction; say so.
+- For arithmetic/math the user asks about that ISN'T a platform lookup (e.g.
+  "what's 12% of 340", compounding, converting a percentage), use calculate
+  rather than doing the math yourself in your head — it avoids silly
+  arithmetic slips. For anything depending on today's date/day-of-week, use
+  get_current_datetime rather than guessing.
 - If a signed-in user explicitly asks you to add/remove/save/track/untrack a
   ticker on their watchlist, use modify_watchlist. Never call this
   proactively or for anything other than an explicit add/remove request, and
@@ -207,20 +233,28 @@ Rules:
   filler unless a term (like a ticker symbol) has no natural Arabic
   equivalent.
 
-Before you answer, check yourself against these two rules — they matter more
+Before you answer, check yourself against these rules — they matter more
 than any other instruction above:
-1. Does the answer contain a price, percentage, ticker fact, sentiment score,
-   prediction, or watchlist/saved-article content? If yes and you haven't
-   called a tool THIS turn to get it, call the right tool first — don't
-   answer from memory, even if you're confident, even if you already showed
-   a similar number earlier in this conversation.
-2. Is there a tool above whose description matches what the user is asking
+1. Is this question actually about the platform's stocks/news/predictions/
+   watchlist? If NOT, just answer it directly and well from your own
+   knowledge/reasoning — don't hunt for a tool that doesn't apply, and don't
+   redirect the user back to stocks.
+2. If it IS about the platform: does the answer contain a price, percentage,
+   ticker fact, sentiment score, prediction, or watchlist/saved-article
+   content? If yes and you haven't called a tool THIS turn to get it, call
+   the right tool first — don't answer from memory, even if you're
+   confident, even if you already showed a similar number earlier in this
+   conversation.
+3. Is there a tool above whose description matches what the user is asking
    (ranking → get_market_movers, worst predictions → get_worst_predictions,
    comparing named tickers → compare_tickers, sector → get_sector_overview,
-   overall market mood → get_market_summary, topic/news search →
-   search_news_by_keyword, 52-week screening → get_52_week_extremes,
-   add/remove watchlist → modify_watchlist, etc.)? If yes, use that specific
-   tool rather than a more generic one or none at all.
+   exchange → get_exchange_overview, overall market mood →
+   get_market_summary, topic/news search → search_news_by_keyword, 52-week
+   screening → get_52_week_extremes, P/E screening → screen_by_pe_ratio,
+   volatility → get_stock_volatility, hypothetical return →
+   calculate_investment_return, add/remove watchlist → modify_watchlist,
+   etc.)? If yes, use that specific tool rather than a more generic one or
+   none at all.
 """
 
 # ---- CACHE for the (potentially huge — 10k+ rows) companies table --------
@@ -334,7 +368,7 @@ def get_top_predictions(limit: int = 10) -> list:
     sorted best-first. Each row has last_known_close_price,
     predicted_close_price and predicted_change_percent. These are model
     outputs, not guarantees — always caveat that when presenting them."""
-    return _backend().get_predictions(limit=min(limit, 30))
+    return _backend().get_predictions(limit=min(limit, 30), offset=0)
 
 
 @tool
@@ -394,7 +428,7 @@ def compare_tickers(tickers: list) -> list:
         if not t_upper:
             continue
         try:
-            rows = _backend().get_predictions(limit=1, ticker=t_upper)
+            rows = _backend().get_predictions(limit=1, offset=0, ticker=t_upper)
             if rows:
                 predictions[t_upper] = rows[0]
         except Exception:
@@ -493,7 +527,7 @@ def get_ticker_prediction(ticker: str) -> dict:
     ticker rather than asking for a top-N list. This is a model output, not
     a guarantee — always caveat that when presenting it."""
     ticker = ticker.strip().upper()
-    rows = _backend().get_predictions(limit=1, ticker=ticker)
+    rows = _backend().get_predictions(limit=1, offset=0, ticker=ticker)
     if rows:
         return rows[0]
     return {"error": f"No prediction found for ticker '{ticker}'."}
@@ -640,6 +674,175 @@ def get_user_watchlist(email: str) -> dict:
     return _backend().get_watchlist(email=email)
 
 
+# ---- GENERAL-PURPOSE / ANALYTICAL TOOLS ------------------------------------
+# These aren't platform data lookups — they're small, self-contained
+# calculations the agent can reach for so it doesn't do arithmetic "in its
+# head" (a common source of silly numeric slips) or guess at today's date.
+
+_SAFE_OPERATORS = {
+    ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul,
+    ast.Div: operator.truediv, ast.Pow: operator.pow, ast.Mod: operator.mod,
+    ast.FloorDiv: operator.floordiv, ast.USub: operator.neg, ast.UAdd: operator.pos,
+}
+
+
+def _safe_eval_node(node):
+    if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
+        return node.value
+    if isinstance(node, ast.BinOp) and type(node.op) in _SAFE_OPERATORS:
+        return _SAFE_OPERATORS[type(node.op)](_safe_eval_node(node.left), _safe_eval_node(node.right))
+    if isinstance(node, ast.UnaryOp) and type(node.op) in _SAFE_OPERATORS:
+        return _SAFE_OPERATORS[type(node.op)](_safe_eval_node(node.operand))
+    raise ValueError("only numbers, + - * / % ** // and parentheses are allowed")
+
+
+@tool
+def calculate(expression: str) -> dict:
+    """Evaluate a plain arithmetic expression — numbers with + - * / % **
+    (power) // (floor division) and parentheses, e.g. "340 * 0.12" or
+    "(120-100)/100*100". Use this for any math the user asks about (percentage
+    math, compounding, unit conversion, etc.) instead of computing it
+    yourself, to avoid arithmetic mistakes. Not for looking up stock data —
+    use the platform tools for that."""
+    try:
+        tree = ast.parse(expression, mode="eval")
+        return {"expression": expression, "result": _safe_eval_node(tree.body)}
+    except Exception as e:
+        return {"expression": expression, "error": f"Could not evaluate this expression: {e}"}
+
+
+@tool
+def get_current_datetime() -> dict:
+    """Get the current date and time (UTC) and day of the week. Use this for
+    anything that depends on "today"/"now" — e.g. how many days until/since a
+    date, or what day of the week it is — instead of guessing."""
+    now = dt.datetime.utcnow()
+    return {
+        "utc_datetime": now.isoformat(timespec="seconds"),
+        "date": now.strftime("%Y-%m-%d"),
+        "day_of_week": now.strftime("%A"),
+    }
+
+
+@tool
+def calculate_investment_return(ticker: str, amount: float, days_ago: int) -> dict:
+    """Calculate a historical "what if" investment return: if the user had put
+    `amount` into `ticker` `days_ago` trading days ago, what it would be worth
+    today, based on real historical closing prices. Returns entry/current
+    price and date, resulting value, and percent return. This is a backward-
+    looking calculation, not a prediction or financial advice — say so when
+    presenting it."""
+    ticker = ticker.strip().upper()
+    rows = _backend().get_stock_prices(ticker=ticker, days=max(days_ago + 5, 30))
+    if not rows or len(rows) < 2:
+        return {"error": f"Not enough price history for '{ticker}' to calculate a return."}
+    entry_idx = max(len(rows) - 1 - days_ago, 0)
+    entry_price = rows[entry_idx].get("close_price")
+    current_price = rows[-1].get("close_price")
+    if not entry_price or not current_price:
+        return {"error": "Missing price data for this calculation."}
+    shares = amount / entry_price
+    current_value = shares * current_price
+    return {
+        "ticker": ticker,
+        "amount_invested": amount,
+        "entry_date": rows[entry_idx].get("trade_date"),
+        "entry_price": entry_price,
+        "current_date": rows[-1].get("trade_date"),
+        "current_price": current_price,
+        "current_value": round(current_value, 2),
+        "return_percent": round((current_value - amount) / amount * 100, 2),
+    }
+
+
+@tool
+def get_stock_volatility(ticker: str, days: int = 30) -> dict:
+    """Calculate a simple historical volatility measure for one ticker: the
+    standard deviation of daily percentage price changes over the last `days`
+    trading days, plus the average daily move. Higher stdev = choppier/
+    riskier lately. Use this for "how volatile/risky has X been" questions."""
+    ticker = ticker.strip().upper()
+    rows = _backend().get_stock_prices(ticker=ticker, days=days)
+    closes = [r["close_price"] for r in rows if r.get("close_price") is not None]
+    if len(closes) < 2:
+        return {"error": f"Not enough price history for '{ticker}' to calculate volatility."}
+    daily_returns = [
+        (closes[i] - closes[i - 1]) / closes[i - 1] * 100
+        for i in range(1, len(closes)) if closes[i - 1]
+    ]
+    if not daily_returns:
+        return {"error": "Could not compute daily returns for this ticker."}
+    mean = sum(daily_returns) / len(daily_returns)
+    variance = sum((r - mean) ** 2 for r in daily_returns) / len(daily_returns)
+    return {
+        "ticker": ticker,
+        "trading_days_analyzed": len(daily_returns),
+        "avg_daily_change_percent": round(mean, 3),
+        "volatility_stdev_percent": round(variance ** 0.5, 3),
+    }
+
+
+@tool
+def screen_by_pe_ratio(mode: str = "lowest", limit: int = 10) -> list:
+    """Screen companies by P/E ratio. mode="lowest" returns the cheapest
+    stocks by P/E (excluding zero/negative P/E, which isn't meaningful);
+    mode="highest" returns the most expensive. Use for "lowest/highest P/E"
+    value-screening questions."""
+    rows = _get_companies_cached()
+    scored = [r for r in rows if r.get("pe_ratio") is not None and r["pe_ratio"] > 0]
+    if not scored:
+        return [{"error": "P/E ratio data not available."}]
+    scored.sort(key=lambda r: r["pe_ratio"], reverse=(mode == "highest"))
+    fields = ("ticker", "company_name", "pe_ratio", "price", "sector")
+    return [{k: r.get(k) for k in fields} for r in scored[: min(limit, 30)]]
+
+
+@tool
+def get_exchange_overview(exchange: Optional[str] = None) -> list:
+    """Get performance rolled up by exchange (NASDAQ, TADAWUL, EGX, DFM,
+    etc.): average day change_percent, gainers/losers count, and company
+    count. Pass an exchange name to see just that exchange's companies, or
+    omit it to compare ALL exchanges. Use for "how's TADAWUL doing" / "which
+    exchange is up the most" questions."""
+    rows = _get_companies_cached()
+    if exchange:
+        ex = exchange.strip().lower()
+        matches = [r for r in rows if (r.get("exchange") or "").lower() == ex]
+        if not matches:
+            return [{"error": f"No companies found on exchange '{exchange}'."}]
+        fields = ("ticker", "company_name", "price", "change_percent")
+        return [{k: m.get(k) for k in fields} for m in matches]
+    by_exchange: dict = {}
+    for r in rows:
+        e = r.get("exchange") or "Unknown"
+        by_exchange.setdefault(e, []).append(r)
+    out = []
+    for e, companies in by_exchange.items():
+        changes = [c["change_percent"] for c in companies if c.get("change_percent") is not None]
+        out.append({
+            "exchange": e,
+            "company_count": len(companies),
+            "avg_change_percent": (sum(changes) / len(changes)) if changes else None,
+            "gainers": sum(1 for c in changes if c > 0),
+            "losers": sum(1 for c in changes if c < 0),
+        })
+    out.sort(key=lambda r: (r["avg_change_percent"] is None, -(r["avg_change_percent"] or 0)))
+    return out
+
+
+@tool
+def list_sectors_and_exchanges() -> dict:
+    """List every distinct sector and exchange currently present on the
+    platform. Use this if you're unsure what sector/exchange name to pass to
+    get_sector_overview/get_exchange_overview, or if the user asks what
+    sectors/exchanges are covered."""
+    rows = _get_companies_cached()
+    return {
+        "sectors": sorted({r["sector"] for r in rows if r.get("sector")}),
+        "exchanges": sorted({r["exchange"] for r in rows if r.get("exchange")}),
+    }
+
+
 TOOLS = [
     search_companies,
     get_company_details,
@@ -658,6 +861,13 @@ TOOLS = [
     get_market_summary,
     get_52_week_extremes,
     modify_watchlist,
+    calculate,
+    get_current_datetime,
+    calculate_investment_return,
+    get_stock_volatility,
+    screen_by_pe_ratio,
+    get_exchange_overview,
+    list_sectors_and_exchanges,
 ]
 
 # ---- GRAPH -------------------------------------------------------------

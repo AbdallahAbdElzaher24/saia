@@ -411,21 +411,38 @@
     border-right:1px solid var(--glass-border);
     padding:22px 16px;display:flex;flex-direction:column;gap:6px;
     position:relative;z-index:60;
-    transition:transform .32s var(--ease-smooth);
+    transition:transform .32s var(--ease-smooth), width .22s var(--ease-smooth), padding .22s var(--ease-smooth);
   }
-  .sidebar .brand{padding:6px 8px 22px;font-size:22px;}
+  .sidebar .brand{padding:6px 8px 22px;font-size:22px;display:flex;align-items:center;gap:10px;}
   .nav-item{
     display:flex;align-items:center;gap:12px;
     padding:12px 14px;border-radius:10px;color:var(--text-dim);
     font-size:15.5px;font-weight:600;background:transparent;border:none;width:100%;text-align:left;
     transition:background .18s var(--ease-smooth), color .18s ease, transform .15s ease;
+    white-space:nowrap;overflow:hidden;
   }
-  .nav-item .ic{width:24px;text-align:center;font-size:20px;}
+  .nav-item .ic{width:24px;text-align:center;font-size:20px;flex-shrink:0;}
   .nav-item .ic.svg-ic{display:inline-flex;align-items:center;justify-content:center;}
   .nav-item .ic.svg-ic svg{width:21px;height:21px;color:inherit;}
   .nav-item:hover{background:var(--panel-2);color:var(--text);transform:translateX(2px);}
   .nav-item.active{background:var(--green-soft);color:var(--green);}
-  .nav-label{color:var(--text-dimmer);font-size:11.5px;letter-spacing:1.2px;padding:14px 14px 4px;text-transform:uppercase;font-weight:700;}
+  .nav-label{color:var(--text-dimmer);font-size:11.5px;letter-spacing:1.2px;padding:14px 14px 4px;text-transform:uppercase;font-weight:700;white-space:nowrap;overflow:hidden;}
+
+  /* ---------- desktop: collapsible / auto-hide sidebar ----------
+     Collapsed by default (icons only, logo always visible). Hovering
+     the sidebar expands it and reveals the text labels; moving the
+     mouse away collapses it again and hides the labels immediately
+     (no lingering transition on the text itself). */
+  @media (min-width:881px){
+    .sidebar{width:76px;overflow:hidden;}
+    .sidebar .txt, .sidebar .nav-label{display:none;}
+    .sidebar .brand{justify-content:center;}
+    .sidebar .nav-item{justify-content:center;padding-left:0;padding-right:0;}
+    .sidebar:hover{width:250px;overflow:visible;box-shadow:24px 0 60px -20px rgba(0,0,0,0.5);}
+    .sidebar:hover .txt, .sidebar:hover .nav-label{display:inline;}
+    .sidebar:hover .brand{justify-content:flex-start;}
+    .sidebar:hover .nav-item{justify-content:flex-start;padding-left:14px;padding-right:14px;}
+  }
 
   /* mobile slide-in drawer */
   .sidebar-overlay{
@@ -615,6 +632,7 @@
   .chat-sidebar{width:230px;flex-shrink:0;display:flex;flex-direction:column;gap:10px;border-right:1px solid var(--border);padding-right:14px;overflow-y:auto;}
   .new-conv-btn{background:var(--green-soft);color:var(--green);border:1px solid rgba(62,207,122,0.35);border-radius:10px;padding:11px 12px;font-weight:700;font-size:14px;cursor:pointer;text-align:center;}
   .new-conv-btn:hover{background:var(--green);color:#06170d;}
+  .new-conv-btn.active{background:var(--green);color:#06170d;box-shadow:0 0 0 2px var(--green-glow);}
   .conv-list{display:flex;flex-direction:column;gap:6px;overflow-y:auto;}
   .conv-item{display:flex;align-items:center;gap:6px;border-radius:9px;padding:2px;transition:background .15s;}
   .conv-item:hover{background:var(--panel);}
@@ -784,8 +802,6 @@
 
       <div class="stat-strip" id="heroStats">
         <div class="stat-card"><div class="lbl">Stocks Tracked</div><div class="val" id="statStocks">—</div></div>
-        <div class="stat-card"><div class="lbl">Sectors Covered</div><div class="val" id="statSectors">—</div></div>
-        <div class="stat-card"><div class="lbl">Live Refresh</div><div class="val" style="display:flex;align-items:center;gap:8px;"><span class="live-dot"></span>20s</div></div>
       </div>
 
       <div class="market-badges">
@@ -841,7 +857,7 @@
         <div class="feature-card reveal">
           <div class="f-icon">✦</div>
           <h3>AI-Powered Predictions</h3>
-          <p>A prediction model projects where each stock is likely headed over the next 30 days.</p>
+          <p>A prediction model projects where each stock is likely headed over the next day.</p>
         </div>
         <div class="feature-card reveal">
           <div class="f-icon">↕</div>
@@ -850,8 +866,8 @@
         </div>
         <div class="feature-card reveal">
           <div class="f-icon">💬</div>
-          <h3>Ask the AI Agent</h3>
-          <p>Talk to SAIA's AI agent directly — ask about any stock, compare two tickers, or get a plain-English read on the market.</p>
+          <h3>Ask SAIA</h3>
+          <p>Talk to SAIA directly — ask about any stock, compare two tickers, or get a plain-English read on the market.</p>
         </div>
       </div>
     </div>
@@ -940,7 +956,7 @@
     <button class="nav-item" data-view="predictions" onclick="switchView('predictions')"><span class="ic">◈</span><span class="txt">Predictions</span></button>
     <button class="nav-item" data-view="news" onclick="switchView('news')"><span class="ic">▤</span><span class="txt">News</span></button>
     <button class="nav-item" data-view="saved-news" onclick="switchView('saved-news')"><span class="ic svg-ic"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 2.5h12a1 1 0 0 1 1 1V21a.5.5 0 0 1-.77.42L12 17.4l-6.23 4.02A.5.5 0 0 1 5 21V3.5a1 1 0 0 1 1-1z"/></svg></span><span class="txt">Bookmarks</span></button>
-    <button class="nav-item" data-view="ai" onclick="switchView('ai')"><span class="ic">✦</span><span class="txt">Ask AI Agent</span></button>
+    <button class="nav-item" data-view="ai" onclick="switchView('ai')"><span class="ic">✦</span><span class="txt">Ask SAIA</span></button>
 
     <div class="nav-label">Export Data</div>
     <button class="nav-item" id="downloadCompaniesBtn" onclick="downloadCompaniesCSV()"><span class="ic">⬇</span><span class="txt">Download Companies (CSV)</span></button>
@@ -1065,10 +1081,10 @@
 
     <!-- AI AGENT -->
     <section id="view-ai" class="view hidden">
-      <div class="section-head"><h2>Ask the AI Agent</h2></div>
+      <div class="section-head"><h2>Ask SAIA</h2></div>
       <div class="chat-shell">
         <aside class="chat-sidebar" id="chatSidebar">
-          <button class="new-conv-btn" onclick="startNewConversation()">+ New conversation</button>
+          <button class="new-conv-btn" id="newConvBtn" onclick="startNewConversation()">+ New conversation</button>
           <div class="conv-list" id="conversationsList"></div>
         </aside>
         <div class="chat-wrap">
@@ -1344,8 +1360,8 @@ function startHeroDirectionCycle(){
   if(window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   const states = [
     {text:'Which way?', cls:'accent-up'},
-    {text:'Up.', cls:'accent-up'},
-    {text:'Down.', cls:'accent-down'}
+    {text:'Up↑', cls:'accent-up'},
+    {text:'Down↓', cls:'accent-down'}
   ];
   let i = 0;
   setInterval(()=>{
@@ -1360,16 +1376,17 @@ function startHeroDirectionCycle(){
 }
 
 /* ================= COUNT-UP + HERO STATS ================= */
-function animateCountUp(el, target){
+function animateCountUp(el, target, opts){
   if(!el) return;
+  const start = (opts && typeof opts.start === 'number') ? opts.start : 0;
+  const duration = (opts && opts.duration) || 1200;
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   if(reduceMotion || !target){ el.textContent = target ? target.toLocaleString() : '—'; return; }
-  const duration = 1200;
   const startTime = performance.now();
   function tick(now){
     const p = Math.min(1, (now-startTime)/duration);
     const eased = 1 - Math.pow(1-p, 3);
-    el.textContent = Math.round(target*eased).toLocaleString();
+    el.textContent = Math.round(start + (target-start)*eased).toLocaleString();
     if(p<1) requestAnimationFrame(tick);
     else el.textContent = target.toLocaleString();
   }
@@ -1377,15 +1394,11 @@ function animateCountUp(el, target){
 }
 // Brings the hero's stat-strip to life with real counts once companies have
 // loaded, instead of leaving it as static placeholder marketing numbers.
+// Starts a bit below the final figure and counts up slowly enough that the
+// increase is clearly visible to the visitor before settling on 13,600.
 function updateHeroStats(){
   const stocksEl = document.getElementById('statStocks');
-  const sectorsEl = document.getElementById('statSectors');
-  if(stocksEl) animateCountUp(stocksEl, COMPANIES.length);
-  if(sectorsEl){
-    const sectors = new Set(COMPANIES.map(c=>c.sector).filter(Boolean));
-    const fallback = new Set(COMPANIES.map(c=>c.category).filter(Boolean));
-    animateCountUp(sectorsEl, sectors.size || fallback.size);
-  }
+  if(stocksEl) animateCountUp(stocksEl, 13600, {start:9200, duration:2600});
 }
 
 /* ================= SCROLL REVEAL ================= */
@@ -2923,7 +2936,7 @@ function renderDetailPriceTable(prices){
 */
 const chatLog = document.getElementById('chatLog');
 const conversationsListEl = document.getElementById('conversationsList');
-const GREETING = "Hi! I'm SAIA's AI agent. Ask me about any stock in the list, compare two tickers, or get a general read on the market.";
+const GREETING = "Hi! I'm SAIA. Ask me about any stock in the list, compare two tickers, or get a general read on the market.";
 
 // Anonymous (not signed in) visitors have no email to key a persisted
 // conversation by, so they keep the old single random-per-tab thread
@@ -2994,6 +3007,8 @@ async function loadConversations(){
 }
 
 function renderConversationsList(){
+  const newBtn = document.getElementById('newConvBtn');
+  if(newBtn) newBtn.classList.toggle('active', !currentConversationId);
   if(!currentUser?.email){
     conversationsListEl.innerHTML = '';
     return;
@@ -3033,7 +3048,16 @@ function startNewConversation(){
     alert('Sign in to start and keep separate conversations.');
     return;
   }
-  if(chatController) return; // don't switch away mid-request
+  // Previously this just silently did nothing while a reply was still
+  // streaming in, which looked like "New conversation" was broken — cancel
+  // that in-flight request first (same as pressing Stop), then proceed,
+  // instead of blocking the click.
+  if(chatController){
+    chatController.abort();
+    chatController = null;
+    if(chatThinkingEl){ chatThinkingEl.remove(); chatThinkingEl = null; }
+    setChatBusy(false);
+  }
   currentConversationId = null;
   pendingDeleteId = null;
   chatLog.innerHTML = '';
@@ -3043,8 +3067,16 @@ function startNewConversation(){
 
 // Opens (loads the messages for) one conversation from the sidebar.
 async function openConversation(id, { skipIfSame = true } = {}){
-  if(chatController) return; // don't switch away mid-request
   if(skipIfSame && id === currentConversationId) return;
+  // Same fix as startNewConversation(): don't just block the click while a
+  // reply is in flight — cancel it (like Stop) and switch anyway, so
+  // clicking another conversation always actually works.
+  if(chatController){
+    chatController.abort();
+    chatController = null;
+    if(chatThinkingEl){ chatThinkingEl.remove(); chatThinkingEl = null; }
+    setChatBusy(false);
+  }
   currentConversationId = id;
   pendingDeleteId = null;
   chatLog.innerHTML = '';
@@ -3271,11 +3303,11 @@ async function sendChat(){
 
 /* ================= FAQ ================= */
 const FAQ_ITEMS = [
-  {q:"How does SAIA's prediction model work?", a:"SAIA runs each stock's recent price history through a demo AI prediction model that projects a likely price 30 days out. It's meant to illustrate the concept — not to be used for real trading decisions."},
-  {q:"Is the market data real or simulated?", a:"This prototype ships with simulated data by default, but the platform is built to plug directly into a real backend — prices, history, and news can be swapped in from live sources."},
+  {q:"How does SAIA's prediction model work?", a:"SAIA runs each stock's recent price history through a demo AI prediction model that projects a likely price of the next day out. It's meant to illustrate the concept —  to be used for real trading decisions."},
+  {q:"Is the market data real or simulated?", a:"The market data provided by the Polygon API is real-time and historical financial data sourced directly from global stock exchanges, rather than a simulation. This ensures your SAIA platform utilizes authentic market fluctuations and pricing, providing the high-fidelity data required for accurate sentiment analysis and financial modeling"},
   {q:"Which markets and exchanges are covered?", a:"The demo includes stocks from NASDAQ, TADAWUL, EGX and DFM, spanning tech, energy, banking and other sectors so you can see how the signal looks across different markets."},
   {q:"Can I export the data I see?", a:"Yes — from the sidebar inside the app you can download the companies list, the stock price history, or the news feed as CSV files at any time. For prices and news you also pick how far back to go before the file is generated."},
-  {q:"How does the AI Assistant help me?", a:"The Ask AI Agent tab lets you chat directly about any stock in the dataset — ask for a plain-English read, compare two tickers, or ask what the prediction means. It always reminds you this is simulated data, not financial advice."}
+  {q:"How does the AI Assistant help me?", a:"The Ask SAIA tab lets you chat directly about any stock in the dataset — ask for a plain-English read, compare two tickers, or ask what the prediction means. It always reminds you this is simulated data, not financial advice."}
 ];
 function renderFAQ(){
   const el = document.getElementById('faqList');
