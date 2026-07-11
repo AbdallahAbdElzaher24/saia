@@ -13,7 +13,7 @@ It combines traditional market data with financial news sentiment to deliver sma
     <img src="https://img.shields.io/badge/Website Demo-Video-blue?style=for-the-badge">
   </a>
   <a href="docs/SAIA_Document.pdf">
-    <img src="https://img.shields.io/badge/Documentation-PDF-4CAF50?style=for-the-badge&logo=googledocs&logoColor=white">
+    <img src="https://img.shields.io/badge/Documentation-PDF-df0b0b?style=for-the-badge&logo=googledocs&logoColor=white">
   </a>
 </p>
 
