@@ -976,7 +976,7 @@
       <button class="menu-toggle" id="menuToggle" aria-label="Open navigation menu" aria-expanded="false" aria-controls="appSidebar" onclick="toggleSidebar()">☰</button>
       <div class="search-box hidden" id="topSearchBox">
         <span>🔍</span>
-        <input id="searchInput" placeholder="Search by ticker or company — e.g. AAPL or Aramco" oninput="onSearchInput()">
+        <input id="searchInput" placeholder="Search by ticker or company — e.g. AAPL or Aramco" oninput="debouncedOnSearchInput()">
       </div>
       <div class="user-chip" id="dataLoadingPill" style="color:var(--green)"><span class="spinner"></span><span class="txt">Loading market data…</span></div>
       <div class="user-chip" id="userChip">👤 Guest</div>
@@ -1032,7 +1032,7 @@
         <div class="meta"><span id="watchlistCount"></span> saved</div>
       </div>
       <div class="filter-bar" id="watchlistFilterBar">
-        <div class="search-box"><span>🔍</span><input type="text" id="watchlistSearchInput" placeholder="Search ticker or company…" oninput="renderWatchlist()"></div>
+        <div class="search-box"><span>🔍</span><input type="text" id="watchlistSearchInput" placeholder="Search ticker or company…" oninput="debouncedRenderWatchlist()"></div>
         <select id="watchlistSectorFilter" onchange="renderWatchlist()"><option value="">All sectors</option></select>
         <select id="watchlistIndustryFilter" onchange="renderWatchlist()"><option value="">All industries</option></select>
         <select id="watchlistCategoryFilter" onchange="renderWatchlist()"><option value="">All categories</option></select>
@@ -1048,7 +1048,7 @@
         <div class="meta">Sorted by strongest predicted gain</div>
       </div>
       <div class="filter-bar" id="predictionsFilterBar">
-        <div class="search-box"><span>🔍</span><input type="text" id="predictionsSearchInput" placeholder="Search ticker or company…" oninput="renderPredictions()"></div>
+        <div class="search-box"><span>🔍</span><input type="text" id="predictionsSearchInput" placeholder="Search ticker or company…" oninput="debouncedRenderPredictions()"></div>
         <select id="predictionsSectorFilter" onchange="renderPredictions()"><option value="">All sectors</option></select>
         <select id="predictionsIndustryFilter" onchange="renderPredictions()"><option value="">All industries</option></select>
         <select id="predictionsCategoryFilter" onchange="renderPredictions()"><option value="">All categories</option></select>
@@ -1078,7 +1078,7 @@
         <div class="meta"><span id="savedNewsCount"></span> saved</div>
       </div>
       <div class="filter-bar" id="savedNewsFilterBar">
-        <div class="search-box"><span>🔍</span><input type="text" id="savedNewsSearchInput" placeholder="Search ticker, title, or publisher…" oninput="renderSavedNews()"></div>
+        <div class="search-box"><span>🔍</span><input type="text" id="savedNewsSearchInput" placeholder="Search ticker, title, or publisher…" oninput="debouncedRenderSavedNews()"></div>
       </div>
       <div class="grid-news" id="savedNewsGrid"></div>
     </section>
@@ -1804,6 +1804,28 @@ function buildMockNews(){
 const MOCK_NEWS = buildMockNews();
 
 /* ================= FORMATTERS ================= */
+// Search inputs (Stocks/Watchlist/Predictions/Bookmarks) filter directly
+// against in-memory arrays that can hold 14k+ companies (or the full
+// predictions pool). Re-running that filter + a full grid re-render on
+// EVERY keystroke is the main thing that makes typing in those boxes feel
+// laggy, especially on slower devices. Debouncing waits for a short pause
+// in typing before doing the (comparatively expensive) filter+render, so
+// fast typing stays smooth and the result still updates almost instantly
+// once the user pauses.
+function debounce(fn, wait){
+  let t;
+  return function(...args){
+    clearTimeout(t);
+    t = setTimeout(()=>fn.apply(this,args), wait);
+  };
+}
+// One debounced wrapper per search box, built from the underlying render
+// functions declared later in this file (safe: function declarations are
+// hoisted, so these can reference them here regardless of source order).
+const debouncedOnSearchInput = debounce(()=>onSearchInput(), 200);
+const debouncedRenderWatchlist = debounce(()=>renderWatchlist(), 200);
+const debouncedRenderPredictions = debounce(()=>renderPredictions(), 200);
+const debouncedRenderSavedNews = debounce(()=>renderSavedNews(), 200);
 function fmtCur(v){
   if(v===undefined || v===null || isNaN(v)) return '—';
   return '$'+(+v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});

@@ -422,17 +422,21 @@ def compare_tickers(tickers: list) -> list:
     three"). Unknown tickers are returned with an error note instead of
     being silently dropped."""
     companies = {r["ticker"]: r for r in _get_companies_cached() if r.get("ticker")}
-    predictions = {}
-    for t in tickers:
-        t_upper = (t or "").strip().upper()
-        if not t_upper:
-            continue
-        try:
-            rows = _backend().get_predictions(limit=1, offset=0, ticker=t_upper)
-            if rows:
-                predictions[t_upper] = rows[0]
-        except Exception:
-            pass
+    # Was previously one live get_predictions(ticker=...) call PER ticker —
+    # for an N-ticker comparison that meant N sequential round trips to
+    # Databricks, each holding one of the shared POOL_SIZE=4 connections
+    # (see app.py's run_query) and slowing this one chat reply down roughly
+    # linearly with how many tickers were being compared. Every other tool
+    # here already reads predictions from the 60s-TTL cached full table
+    # (_get_all_predictions_cached) instead of hitting the warehouse live —
+    # this just brings compare_tickers in line with that pattern, so
+    # comparing tickers costs one cached in-memory lookup instead of N
+    # network round trips.
+    predictions = {
+        r["ticker"]: r
+        for r in _get_all_predictions_cached()
+        if r.get("ticker") and r.get("predicted_change_percent") is not None
+    }
     out = []
     for t in tickers:
         t = (t or "").strip().upper()
